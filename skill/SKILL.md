@@ -5,31 +5,36 @@ description: "情圣 — 中文男性社交与恋爱私教（中文恋爱 AI · 
 
 ## Preamble（每次 skill 加载时自动执行）
 
-```bash
+> **Windows / DSH 适配版**：上游的 bash Preamble 已改写为 PowerShell，路径指向本机真实位置。
+> 上游原版备份在 `C:\Users\Administrator\.dsh\skills\_bak-upstream\qingsheng\`。
+
+```powershell
 # 版本检查（最多每 24 小时一次，不影响对话速度）
-_QS_LOCAL=$(cat ~/.claude/skills/qingsheng-skill/VERSION 2>/dev/null | tr -d '[:space:]' || echo "unknown")
-_QS_LAST=$(cat ~/.qingsheng/last-update-check 2>/dev/null || echo 0)
-_QS_NOW=$(date +%s)
-_QS_DIFF=$(( _QS_NOW - _QS_LAST ))
-if [ "$_QS_DIFF" -gt 86400 ]; then
-  _QS_REMOTE=$(curl -fsSL --max-time 3 https://raw.githubusercontent.com/tomwong001/qingsheng-skill/main/VERSION 2>/dev/null | tr -d '[:space:]' || echo "")
-  mkdir -p ~/.qingsheng && echo "$_QS_NOW" > ~/.qingsheng/last-update-check
-  if [ -n "$_QS_REMOTE" ] && [ "$_QS_REMOTE" != "$_QS_LOCAL" ] && [ "$_QS_LOCAL" != "unknown" ]; then
-    echo "UPGRADE_AVAILABLE $_QS_LOCAL $_QS_REMOTE"
-  fi
-fi
-echo "QS_VERSION=$_QS_LOCAL"
+$QS_HOME  = "C:\Users\Administrator\.dsh\skills\qingsheng"
+$QS_STATE = "C:\Users\Administrator\AppData\Roaming\.qingsheng"
+$QS_LOCAL = if (Test-Path "$QS_HOME\VERSION") { (Get-Content "$QS_HOME\VERSION" -Raw).Trim() } else { "unknown" }
+New-Item -ItemType Directory -Force -Path $QS_STATE | Out-Null
+$QS_LAST = 0
+if (Test-Path "$QS_STATE\last-update-check") { $QS_LAST = [int64]((Get-Content "$QS_STATE\last-update-check" -Raw).Trim()) }
+$QS_NOW = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+if (($QS_NOW - $QS_LAST) -gt 86400) {
+  $QS_REMOTE = ""
+  try { $QS_REMOTE = (Invoke-RestMethod -Uri "https://raw.githubusercontent.com/tomwong001/qingsheng-skill/main/VERSION" -TimeoutSec 3).Trim() } catch {}
+  Set-Content "$QS_STATE\last-update-check" $QS_NOW
+  if ($QS_REMOTE -and $QS_REMOTE -ne $QS_LOCAL -and $QS_LOCAL -ne "unknown") { "UPGRADE_AVAILABLE $QS_LOCAL $QS_REMOTE" }
+}
+"QS_VERSION=$QS_LOCAL"
 ```
 
-如果输出包含 `UPGRADE_AVAILABLE <旧版本> <新版本>`：用 AskUserQuestion 问用户：
+如果输出包含 `UPGRADE_AVAILABLE <旧版本> <新版本>`：直接在回复里问用户（DSH 没有 AskUserQuestion 工具，用普通提问即可）：
 
 > 情圣有新版本 **v{新}**（你现在是 v{旧}），要更新吗？
 
 选项：
 - **现在更新** → 读取 `qingsheng-upgrade.md` 执行升级流程，完成后继续正常对话
-- **以后再说** → 写入 snooze（`echo "$_QS_REMOTE" > ~/.qingsheng/update-snoozed`），本次不再提
+- **以后再说** → 写入 snooze（`Set-Content "C:\Users\Administrator\AppData\Roaming\.qingsheng\update-snoozed" $QS_REMOTE`），本次不再提
 
-如果 `~/.qingsheng/update-snoozed` 里的版本号 == 当前远端版本，本次跳过提示（用户已推迟过）。
+如果 `C:\Users\Administrator\AppData\Roaming\.qingsheng\update-snoozed` 里的版本号 == 当前远端版本，本次跳过提示（用户已推迟过）。
 
 ---
 
@@ -77,7 +82,7 @@ echo "QS_VERSION=$_QS_LOCAL"
 
 **`/急`** — 快速模式，跳过信息门，直接给 3-5 句结论和行动建议。
 
-**`/复盘 <称呼>`** — 读取目标档案，串一遍历史进度和当前卡点。没有称呼则用 `AskUserQuestion` 让用户点选。
+**`/复盘 <称呼>`** — 读取目标档案，串一遍历史进度和当前卡点。没有称呼则列出 2-3 个候选让用户点选。
 
 **`/展示面`** — 展示面诊断模式。读取 `references/profile-audit.md`。
 - **有截图**：直接读取头像/朋友圈/个人主页截图，按 Gate A 更新用户档案，再分析
@@ -106,7 +111,7 @@ echo "QS_VERSION=$_QS_LOCAL"
 
 ### 第负一步：上下文加载（每次对话最先执行）
 
-读取 `references/user-context.md` 中的档案管理协议：检查 `~/.qingsheng/user-profile.md` 和 `~/.qingsheng/targets/` 是否存在，识别当前在聊谁。老用户回来时不重复问已知信息。
+读取 `references/user-context.md` 中的档案管理协议：检查 `C:\Users\Administrator\AppData\Roaming\.qingsheng\user-profile.md` 和 `C:\Users\Administrator\AppData\Roaming\.qingsheng\targets\` 是否存在，识别当前在聊谁。老用户回来时不重复问已知信息。
 
 ---
 
@@ -120,9 +125,9 @@ echo "QS_VERSION=$_QS_LOCAL"
 
 **执行顺序**（沿用原有引导；素材不足时先利用可用工具查找，再补问缺失信息）：
 1. 沿用"哪个软件、哪位对象、怎么认识、目前卡在哪"的引导，已知信息不重复问；先确认是本人档案还是某位目标的档案。告知用户"先给你建个档，以后进度会存下来"
-2. 默认使用 `user-context.md` 规定的本地存储目录（macOS/Linux `~/.qingsheng/`，Windows `$APPDATA/.qingsheng/`），不再问用户选路径
+2. 默认使用 `user-context.md` 规定的本地存储目录（本机 Windows/DSH：`C:\Users\Administrator\AppData\Roaming\.qingsheng\`），不再问用户选路径
 3. 有截图或文字就直接使用；缺少截图、截图不全或还需个人资料，且电脑端 computer use 可用时，按 `references/user-context.md` 的「素材采集」自行定位该软件内的对象、聊天和资料页。无需用户先打开精确页面或教你入口位置；完成相关查找仍无法读取时，再请用户补最少的截图或文字
-4. 对象可辨且环境可写入时，用户自己的展示面只创建/更新 `~/.qingsheng/user-profile.md`；具体目标则创建用户档案（如不存在）和 `~/.qingsheng/targets/{称呼}.md`。只填已核实的信息，目标称呼优先用非识别性代号
+4. 对象可辨且环境可写入时，用户自己的展示面只创建/更新 `C:\Users\Administrator\AppData\Roaming\.qingsheng\user-profile.md`；具体目标则创建用户档案（如不存在）和 `C:\Users\Administrator\AppData\Roaming\.qingsheng\targets\{称呼}.md`。只填已核实的信息，目标称呼优先用非识别性代号
 5. 实际写入后再明确告诉用户真实文件路径，方便随时打开查看
 6. 然后才进入第零步信息门 + 分析
 
@@ -131,7 +136,7 @@ echo "QS_VERSION=$_QS_LOCAL"
 - 等用户自己问"你建档案了吗"才去建——这是系统性失败
 - 能识别对象且能写入时把建档和首轮分析分两轮做；对象仍无法确认或完成相关查找后仍无法读取时，先问关键问题，不生成猜测的目标档案，也不声称已建档
 
-**老用户回来**（`~/.qingsheng/user-profile.md` 已存在）：跳过用户档案创建，但新目标仍需按步骤 3-5 采集、建 `targets/{称呼}.md` 并告知路径。
+**老用户回来**（`C:\Users\Administrator\AppData\Roaming\.qingsheng\user-profile.md` 已存在）：跳过用户档案创建，但新目标仍需按步骤 3-5 采集、建 `targets/{称呼}.md` 并告知路径。
 
 ### 第零步：信息门（按上下文丰富程度决定行为）
 

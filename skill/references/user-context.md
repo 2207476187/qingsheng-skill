@@ -136,15 +136,15 @@ updated: {最后更新日期}
 ## 持久化 — 全局统一路径
 
 **存储根路径**：
-- macOS / Linux：`~/.qingsheng/`
-- Windows：`$APPDATA/.qingsheng/`
+- **本机（Windows / DSH）**：`C:\Users\Administrator\AppData\Roaming\.qingsheng\`（即 `$env:APPDATA\.qingsheng\`）
+- 其他平台参考：macOS / Linux `~/.qingsheng/`；Windows 原生 `$APPDATA/.qingsheng/`
 
 这是**跨 agent、跨项目、跨会话**都能找到的统一位置。不再让用户选路径，原因在下面。
 
 ### 目录结构
 
 ```
-~/.qingsheng/
+C:\Users\Administrator\AppData\Roaming\.qingsheng\
 ├── user-profile.md         # 用户档案（自己的情况）
 ├── targets/                # 每个目标一个文件
 │   ├── Judy.md
@@ -154,17 +154,17 @@ updated: {最后更新日期}
 └── last-update-check       # preamble 写的，别动
 ```
 
-### 为什么不再 AskUserQuestion 问路径
+### 为什么不再问用户选路径
 
 实测发现用户**根本不在意存哪**，只在意"我能不能看到"。之前让用户点选路径反而：
 - 在第一轮对话前打断节奏
 - 用户选完一头雾水，不知道刚选了什么
 - Cursor/Codex 的原生记忆区路径用户根本不熟，选了也找不到
 
-改成默认 `~/.qingsheng/` + **明确告知路径** 后：
+改成默认 `C:\Users\Administrator\AppData\Roaming\.qingsheng\` + **明确告知路径** 后：
 - 无需用户操作，Skill 直接建档
 - 路径固定，跨 agent 一致（Claude Code / Cursor / Codex 都能找到同一个目录）
-- 用户想看随时 `open ~/.qingsheng/` 或 `cat ~/.qingsheng/targets/Judy.md`
+- 用户想看随时 `explorer "C:\Users\Administrator\AppData\Roaming\.qingsheng"` 或 `Get-Content "C:\Users\Administrator\AppData\Roaming\.qingsheng\targets\Judy.md"`
 
 ### 素材采集：截图与电脑端自动查找
 
@@ -179,30 +179,30 @@ updated: {最后更新日期}
 
 ### 建档流程
 
-**首次建档**（`~/.qingsheng/user-profile.md` 不存在）：
+**首次建档**（`C:\Users\Administrator\AppData\Roaming\.qingsheng\user-profile.md` 不存在）：
 
-1. Bash 创建目录：`mkdir -p ~/.qingsheng/targets`
-2. 创建 `~/.qingsheng/user-profile.md`（用档案模板，能采集到的信息都填上）
-3. 只有当前确实有可辨认的目标对象时，才创建 `~/.qingsheng/targets/{称呼}.md`；本人展示面只需用户档案
-4. 告诉用户："建好了，你的档案在 `~/.qingsheng/`，想看随时打开。"
+1. PowerShell 创建目录：`New-Item -ItemType Directory -Force -Path "C:\Users\Administrator\AppData\Roaming\.qingsheng\targets" | Out-Null`
+2. 创建 `C:\Users\Administrator\AppData\Roaming\.qingsheng\user-profile.md`（用档案模板，能采集到的信息都填上）
+3. 只有当前确实有可辨认的目标对象时，才创建 `C:\Users\Administrator\AppData\Roaming\.qingsheng\targets\{称呼}.md`；本人展示面只需用户档案
+4. 告诉用户："建好了，你的档案在 `C:\Users\Administrator\AppData\Roaming\.qingsheng\`，想看随时打开。"
 
 **新目标建档**（user-profile.md 已存在，但这个女生是第一次聊）：
 
 1. 确认称呼（优先昵称或特征代号，如"咖啡店女生"；只有用户明确选择真名时才用真名）
-2. 创建 `~/.qingsheng/targets/{称呼}.md`
-3. 告诉用户："建好了，存在 `~/.qingsheng/targets/{称呼}.md`，以后说 `/复盘 {称呼}` 就能调出来。"
+2. 创建 `C:\Users\Administrator\AppData\Roaming\.qingsheng\targets\{称呼}.md`
+3. 告诉用户："建好了，存在 `C:\Users\Administrator\AppData\Roaming\.qingsheng\targets\{称呼}.md`，以后说 `/复盘 {称呼}` 就能调出来。"
 
-**老目标回来**（`~/.qingsheng/targets/{称呼}.md` 已存在）：
+**老目标回来**（`C:\Users\Administrator\AppData\Roaming\.qingsheng\targets\{称呼}.md` 已存在）：
 - 直接读取档案，输出上次进度摘要，继续。不重复建档。
 
 ### 称呼确定策略
 
 - 用户说了名字/昵称 → 优先用昵称或代号；真名只有用户明确选择用于文件名时才用
-- 只有代号（"那个女生"）→ 问 AskUserQuestion 给 2-3 个候选
+- 只有代号（"那个女生"）→ 直接列出 2-3 个候选让用户点选
 - 用户发了截图里有名字 → 默认建议昵称或代号；只有用户明确选择真名时才写入档案名
 
 ### 兜底规则
 
-- **不要**让用户自己输入路径——默认 `~/.qingsheng/` 就够了
+- **不要**让用户自己输入路径——默认 `C:\Users\Administrator\AppData\Roaming\.qingsheng\` 就够了
 - **不要**在没建档的情况下先给分析（这是 SKILL.md 「第负一步 Gate A」的硬门）
-- Windows 环境 Bash 用 `$APPDATA/.qingsheng/` 替代 `$HOME/.qingsheng/`（检测 `uname -s` 是 MINGW*/MSYS*/CYGWIN*）
+- 本机统一用 `C:\Users\Administrator\AppData\Roaming\.qingsheng\`；写文件用 PowerShell（`Set-Content` / `New-Item`），不要用 `mkdir -p`、`cat`、`open` 这些 bash/macOS 命令
